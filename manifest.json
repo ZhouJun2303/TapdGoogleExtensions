@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "TAPD 一键导出需求单",
+  "version": "1.0.0",
+  "description": "在 TAPD 待办预览页导出说明与图片路径到剪贴板",
+  "permissions": ["downloads", "clipboardWrite"],
+  "host_permissions": ["https://www.tapd.cn/*"],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.tapd.cn/tapd_fe/my/work*"],
+      "js": ["content/tapd-export.js"],
+      "css": ["styles/inject.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
