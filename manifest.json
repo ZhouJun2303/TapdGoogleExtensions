@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TAPD 一键导出需求单",
-  "version": "1.0.0",
-  "description": "在 TAPD 待办预览页导出说明与图片路径到剪贴板",
+  "version": "1.1.0",
+  "description": "在 TAPD 待办预览或需求/缺陷详情页导出说明与图片路径到剪贴板",
   "permissions": ["downloads", "clipboardWrite"],
   "host_permissions": ["https://www.tapd.cn/*"],
   "background": {
@@ -10,7 +10,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.tapd.cn/tapd_fe/my/work*"],
+      "matches": [
+        "https://www.tapd.cn/tapd_fe/my/work*",
+        "https://www.tapd.cn/tapd_fe/*/story/detail/*",
+        "https://www.tapd.cn/tapd_fe/*/bug/detail/*"
+      ],
       "js": ["content/tapd-export.js"],
       "css": ["styles/inject.css"],
       "run_at": "document_idle",

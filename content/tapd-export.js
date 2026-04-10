@@ -143,9 +143,38 @@
   const NOISE_LINE_RE =
     /^(接受\/处理|已拒绝|当前|查看流程图|系统默认|\d+px)$/i;
 
-  function getDialogPreviewId() {
+  /** 用于下载目录名：dialog_preview_id 或从详情页路径解析 story_/bug_<数字> */
+  function getExportWorkItemId() {
     const q = new URLSearchParams(window.location.search);
-    return q.get("dialog_preview_id") || "";
+    const fromQuery = (q.get("dialog_preview_id") || "").trim();
+    if (
+      fromQuery &&
+      (fromQuery.startsWith("story_") || fromQuery.startsWith("bug_"))
+    ) {
+      return fromQuery;
+    }
+    const m = window.location.pathname.match(/\/(story|bug)\/detail\/(\d+)/i);
+    if (m) {
+      return `${m[1].toLowerCase()}_${m[2]}`;
+    }
+    return "";
+  }
+
+  function isStandaloneDetailPage() {
+    return /\/(story|bug)\/detail\/\d+/i.test(window.location.pathname);
+  }
+
+  /** 弹窗预览用弹层；独立详情页用主内容区或 body，避免无弹窗时不显示按钮 */
+  function findExportRootContainer() {
+    const modal = findModalRoot();
+    if (modal) return modal;
+    if (isStandaloneDetailPage()) {
+      const main = document.querySelector(
+        "main, [class*='detail-layout'], [class*='DetailLayout'], [class*='page-content'], [class*='PageContent'], #root > div"
+      );
+      return main || document.body;
+    }
+    return null;
   }
 
   function isVisible(el) {
@@ -632,11 +661,11 @@
   }
 
   function syncUi() {
-    if (!getDialogPreviewId()) {
+    if (!getExportWorkItemId()) {
       removeUi();
       return;
     }
-    if (!findModalRoot()) {
+    if (!findExportRootContainer()) {
       removeUi();
       return;
     }
@@ -660,22 +689,22 @@
 
   async function onExportClick() {
     const btn = document.getElementById("tapd-export-btn");
-    const previewId = getDialogPreviewId();
+    const previewId = getExportWorkItemId();
     if (!previewId) {
-      showToast("当前 URL 缺少 dialog_preview_id", true);
+      showToast("当前页面不是可导出的需求/缺陷（预览或详情）", true);
       return;
     }
 
     if (!previewId.startsWith("story_") && !previewId.startsWith("bug_")) {
-      showToast("仅支持 story_/bug_ 预览链接", true);
+      showToast("仅支持需求 story 或缺陷 bug", true);
       return;
     }
 
     btn.disabled = true;
     try {
-      const container = findModalRoot();
+      const container = findExportRootContainer();
       if (!container) {
-        showToast("未检测到预览弹窗，请打开需求/缺陷预览后再试", true);
+        showToast("未找到页面内容区域，请刷新后重试", true);
         return;
       }
       const description = findWorkItemSummary(container);
