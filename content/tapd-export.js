@@ -471,12 +471,23 @@
     return "";
   }
 
-  function buildGitSubtitle(previewId, container, scope) {
+  function buildGitSubtitle(previewId, container, scope, includeId = true) {
     // 按你给的 DOM：
     // story：上级需求（a） + 当前标题（p.label-selectable__tag）
     // bug：当前标题（p.label-selectable__tag）
     function norm(s) {
       return (s || "").replace(/\s+/g, " ").trim();
+    }
+
+    function getHeaderIdFromDrawer(c) {
+      // 你给的：span.detail-container-header-id => "ID: 1005161"
+      const el = c.querySelector('.detail-container-header-id') || c.querySelector('[class*="detail-container-header-id"]');
+      const raw = norm(el?.innerText || el?.textContent || "");
+      // 保留 "ID: xxxx" 这种格式
+      if (/^ID:\s*\d+/i.test(raw)) return raw.replace(/\s+/g, " ").trim();
+      // 容错：如果只抓到数字，也补上前缀
+      const m = raw.match(/(\d+)/);
+      return m ? `ID: ${m[1]}` : "";
     }
 
     function getCurrentTitleFromDrawer(c) {
@@ -494,21 +505,27 @@
     }
 
     const currentTitle = getCurrentTitleFromDrawer(container);
+    const headerId = includeId
+      ? getHeaderIdFromDrawer(container) || extractIdLine(container, scope)
+      : "";
 
     // bug：只要当前标题
-    if (previewId?.startsWith("bug_")) return currentTitle;
+    if (previewId?.startsWith("bug_")) {
+      const rest = currentTitle;
+      return [headerId, rest].filter(Boolean).join(" ").trim();
+    }
 
     // story：上级需求 + 当前标题
     if (previewId?.startsWith("story_")) {
       const parentTitle = getParentTitleFromDrawer(container);
-      if (parentTitle && currentTitle) return `${parentTitle} + ${currentTitle}`;
-      if (currentTitle) return currentTitle;
+      const rest =
+        parentTitle && currentTitle ? `${parentTitle} + ${currentTitle}` : currentTitle;
+      return [headerId, rest].filter(Boolean).join(" ").trim();
     }
 
     // 兜底：ID + 当前标题
-    const idLine = extractIdLine(container, scope);
-    if (!idLine) return currentTitle || "";
-    return `${idLine} ${currentTitle || ""}`.trim();
+    const rest = currentTitle || "";
+    return [headerId, rest].filter(Boolean).join(" ").trim();
   }
 
   function dedupeConsecutiveLines(lines) {
@@ -762,10 +779,17 @@
     btnGit.textContent = "复制 Git 提交信息";
     root.appendChild(btnGit);
 
+    const btnGitNoId = document.createElement("button");
+    btnGitNoId.id = "tapd-export-git-noid-btn";
+    btnGitNoId.type = "button";
+    btnGitNoId.textContent = "复制 Git 提交信息（不含ID）";
+    root.appendChild(btnGitNoId);
+
     document.documentElement.appendChild(root);
 
     btnExport.addEventListener("click", onExportClick);
     btnGit.addEventListener("click", onGitSubmitClick);
+    btnGitNoId.addEventListener("click", onGitSubmitNoIdClick);
   }
 
   async function onExportClick() {
@@ -839,7 +863,7 @@
         return;
       }
       const scope = findPrimaryScope(container);
-      const subtitle = buildGitSubtitle(previewId, container, scope);
+      const subtitle = buildGitSubtitle(previewId, container, scope, true);
       const line = (subtitle || "").trim();
 
       if (!line) {
@@ -848,6 +872,43 @@
       }
       await navigator.clipboard.writeText(line);
       showToast("已复制 Git 提交记录信息");
+    } catch (e) {
+      showToast(e?.message || String(e), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function onGitSubmitNoIdClick() {
+    const btn = document.getElementById("tapd-export-git-noid-btn");
+    const previewId = getExportWorkItemId();
+    if (!previewId) {
+      showToast("当前页面不是可导出的需求/缺陷（预览或详情）", true);
+      return;
+    }
+
+    if (!previewId.startsWith("story_") && !previewId.startsWith("bug_")) {
+      showToast("仅支持需求 story 或缺陷 bug", true);
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const container = findExportRootContainer();
+      if (!container) {
+        showToast("未找到页面内容区域，请刷新后重试", true);
+        return;
+      }
+      const scope = findPrimaryScope(container);
+      const subtitle = buildGitSubtitle(previewId, container, scope, false);
+      const line = (subtitle || "").trim();
+
+      if (!line) {
+        showToast("未抓取到“上级需求/当前标题”，请再试一次", true);
+        return;
+      }
+      await navigator.clipboard.writeText(line);
+      showToast("已复制 Git 提交信息（不含ID）");
     } catch (e) {
       showToast(e?.message || String(e), true);
     } finally {
