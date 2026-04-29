@@ -2,11 +2,14 @@
   all: initial;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
   position: fixed;
-  left: 50%;
-  top: max(12px, env(safe-area-inset-top, 0px));
-  transform: translateX(-50%);
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
   z-index: 2147483646;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 #tapd-export-root * {
@@ -33,6 +36,30 @@
 }
 
 #tapd-export-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+#tapd-export-git-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+#tapd-export-git-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(22, 163, 74, 0.45);
+}
+
+#tapd-export-git-btn:disabled {
   opacity: 0.65;
   cursor: wait;
 }

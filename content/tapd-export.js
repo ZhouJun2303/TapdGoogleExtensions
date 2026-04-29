@@ -438,6 +438,79 @@
     return idm ? `ID: ${idm[1]}` : "";
   }
 
+  function extractLabeledValue(container, labels) {
+    // 优先按 Ant Design Descriptions 的结构抓取：
+    // .ant-descriptions-item-label / .ant-descriptions-item-content
+    try {
+      const items = container.querySelectorAll(
+        ".ant-descriptions-item, [class*='ant-descriptions-item']"
+      );
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const labelEl = item.querySelector(
+          ".ant-descriptions-item-label, [class*='item-label'], [class*='Label']"
+        );
+        if (!labelEl) continue;
+        const labelText = (labelEl.innerText || "").trim();
+        if (!labelText) continue;
+
+        for (let j = 0; j < labels.length; j++) {
+          const want = labels[j];
+          if (labelText === want || labelText.includes(want)) {
+            const contentEl = item.querySelector(
+              ".ant-descriptions-item-content, [class*='item-content'], [class*='Content'], [class*='value']"
+            );
+            if (contentEl) {
+              const val = (contentEl.innerText || "").trim();
+              if (val) return val;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return "";
+  }
+
+  function buildGitSubtitle(previewId, container, scope) {
+    // 按你给的 DOM：
+    // story：上级需求（a） + 当前标题（p.label-selectable__tag）
+    // bug：当前标题（p.label-selectable__tag）
+    function norm(s) {
+      return (s || "").replace(/\s+/g, " ").trim();
+    }
+
+    function getCurrentTitleFromDrawer(c) {
+      const selTitle =
+        '[class*="detail-container-header"] [class*="title-area"] p.label-selectable__tag';
+      const titleEl = c.querySelector(selTitle) || c.querySelector("p.label-selectable__tag");
+      return norm(titleEl?.innerText || titleEl?.textContent || "");
+    }
+
+    function getParentTitleFromDrawer(c) {
+      // 你截图红圈的“上级需求”是：div.detail-item__parent--header ... > a
+      const selParent = '[class*="detail-item__parent--header"] a';
+      const parentEl = c.querySelector(selParent) || c.querySelector('a[href*="/story/detail/"]');
+      return norm(parentEl?.innerText || parentEl?.textContent || "");
+    }
+
+    const currentTitle = getCurrentTitleFromDrawer(container);
+
+    // bug：只要当前标题
+    if (previewId?.startsWith("bug_")) return currentTitle;
+
+    // story：上级需求 + 当前标题
+    if (previewId?.startsWith("story_")) {
+      const parentTitle = getParentTitleFromDrawer(container);
+      if (parentTitle && currentTitle) return `${parentTitle} + ${currentTitle}`;
+      if (currentTitle) return currentTitle;
+    }
+
+    // 兜底：ID + 当前标题
+    const idLine = extractIdLine(container, scope);
+    if (!idLine) return currentTitle || "";
+    return `${idLine} ${currentTitle || ""}`.trim();
+  }
+
   function dedupeConsecutiveLines(lines) {
     const out = [];
     for (let i = 0; i < lines.length; i++) {
@@ -677,14 +750,22 @@
 
     const root = document.createElement("div");
     root.id = "tapd-export-root";
-    const btn = document.createElement("button");
-    btn.id = "tapd-export-btn";
-    btn.type = "button";
-    btn.textContent = "一键转为需求单";
-    root.appendChild(btn);
+    const btnExport = document.createElement("button");
+    btnExport.id = "tapd-export-btn";
+    btnExport.type = "button";
+    btnExport.textContent = "一键转为需求单";
+    root.appendChild(btnExport);
+
+    const btnGit = document.createElement("button");
+    btnGit.id = "tapd-export-git-btn";
+    btnGit.type = "button";
+    btnGit.textContent = "复制 Git 提交信息";
+    root.appendChild(btnGit);
+
     document.documentElement.appendChild(root);
 
-    btn.addEventListener("click", onExportClick);
+    btnExport.addEventListener("click", onExportClick);
+    btnGit.addEventListener("click", onGitSubmitClick);
   }
 
   async function onExportClick() {
@@ -730,6 +811,43 @@
           ? "已复制到剪贴板"
           : `已复制到剪贴板（图片 ${n} 张${failN ? `，${failN} 张失败` : ""}）`;
       showToast(tip, failN > 0 && n === 0);
+    } catch (e) {
+      showToast(e?.message || String(e), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function onGitSubmitClick() {
+    const btn = document.getElementById("tapd-export-git-btn");
+    const previewId = getExportWorkItemId();
+    if (!previewId) {
+      showToast("当前页面不是可导出的需求/缺陷（预览或详情）", true);
+      return;
+    }
+
+    if (!previewId.startsWith("story_") && !previewId.startsWith("bug_")) {
+      showToast("仅支持需求 story 或缺陷 bug", true);
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const container = findExportRootContainer();
+      if (!container) {
+        showToast("未找到页面内容区域，请刷新后重试", true);
+        return;
+      }
+      const scope = findPrimaryScope(container);
+      const subtitle = buildGitSubtitle(previewId, container, scope);
+      const line = (subtitle || "").trim();
+
+      if (!line) {
+        showToast("未抓取到“上级需求/当前标题”，请再试一次", true);
+        return;
+      }
+      await navigator.clipboard.writeText(line);
+      showToast("已复制 Git 提交记录信息");
     } catch (e) {
       showToast(e?.message || String(e), true);
     } finally {
